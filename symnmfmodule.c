@@ -3,9 +3,9 @@
 #include "symnmf.h"
 
 /*
- * fill_row - copy a Python list of floats into a C row.
- * Input: row - the Python object, dst - C row of length cols, cols.
- * Output: 0 on success, -1 with a Python exception set.
+ * Copies one Python list of numbers into a row of a C matrix.
+ * Input:  row - the Python list, dst - the C row, cols - expected length.
+ * Output: 0 on success, -1 if the row is invalid (a Python error is set).
  */
 static int fill_row(PyObject *row, double *dst, int cols)
 {
@@ -20,10 +20,10 @@ static int fill_row(PyObject *row, double *dst, int cols)
 }
 
 /*
- * list_to_matrix - convert a non-empty Python list of equal-length,
- * non-empty lists of floats into a new C matrix.
- * Input: obj - the Python object, rows, cols - outputs for dimensions.
- * Output: new matrix, or NULL with a Python exception set.
+ * Converts a Python list of lists into a new C matrix.
+ * All the inner lists must be non-empty and have the same length.
+ * Input:  obj - the Python list, rows and cols - filled with its size.
+ * Output: the new matrix, or NULL on failure (a Python error is set).
  */
 static double **list_to_matrix(PyObject *obj, int *rows, int *cols)
 {
@@ -52,9 +52,9 @@ static double **list_to_matrix(PyObject *obj, int *rows, int *cols)
 }
 
 /*
- * matrix_to_list - convert a C matrix into a new Python list of lists.
- * Input: mat - rows x cols matrix, rows, cols.
- * Output: new reference to the list, or NULL with a Python exception set.
+ * Converts a C matrix into a new Python list of lists.
+ * Input:  mat - the matrix, rows, cols - its size.
+ * Output: the new Python list, or NULL on failure (a Python error is set).
  */
 static PyObject *matrix_to_list(double **mat, int rows, int cols)
 {
@@ -82,13 +82,13 @@ static PyObject *matrix_to_list(double **mat, int rows, int cols)
 }
 
 /*
- * run_on_points - shared body of sym/ddg/norm: parse the data points,
- * apply func and return the resulting n x n matrix as a Python list.
- * Input: args - Python args tuple (X), func - one of sym, ddg, norm.
- * Output: new Python list, or NULL with an exception set.
+ * Shared code for sym, ddg and norm: reads the data points sent from
+ * Python, runs func on them and returns the n x n result as a Python list.
+ * Input:  args - the Python arguments (the data points),
+ *         func - the C function to run (sym, ddg or norm).
+ * Output: the result as a Python list, or NULL on failure.
  */
-static PyObject *run_on_points(PyObject *args,
-                               double **(*func)(double **, int, int))
+static PyObject *run_on_points(PyObject *args, GoalFunc func)
 {
     PyObject *obj, *result;
     double **X, **res;
@@ -107,21 +107,33 @@ static PyObject *run_on_points(PyObject *args,
     return result;
 }
 
-/* sym(X) -> similarity matrix A as a list of lists. */
+/*
+ * Python wrapper for sym(X).
+ * Input:  the data points as a list of lists.
+ * Output: the similarity matrix as a list of lists.
+ */
 static PyObject *py_sym(PyObject *self, PyObject *args)
 {
     (void)self;
     return run_on_points(args, sym);
 }
 
-/* ddg(X) -> diagonal degree matrix D as a list of lists. */
+/*
+ * Python wrapper for ddg(X).
+ * Input:  the data points as a list of lists.
+ * Output: the diagonal degree matrix as a list of lists.
+ */
 static PyObject *py_ddg(PyObject *self, PyObject *args)
 {
     (void)self;
     return run_on_points(args, ddg);
 }
 
-/* norm(X) -> normalized similarity matrix W as a list of lists. */
+/*
+ * Python wrapper for norm(X).
+ * Input:  the data points as a list of lists.
+ * Output: the normalized similarity matrix as a list of lists.
+ */
 static PyObject *py_norm(PyObject *self, PyObject *args)
 {
     (void)self;
@@ -129,10 +141,10 @@ static PyObject *py_norm(PyObject *self, PyObject *args)
 }
 
 /*
- * py_symnmf - symnmf(H, W, max_iter, eps) -> final H as a list of lists.
- * Input: H - n x k initial matrix, W - n x n normalized similarity,
- *        max_iter, eps - convergence parameters.
- * Output: new Python list, or NULL with an exception set.
+ * Python wrapper for symnmf(H, W, max_iter, eps).
+ * Input:  H - the initial matrix, W - the normalized similarity matrix,
+ *         max_iter, eps - when to stop.
+ * Output: the final H as a list of lists, or NULL on failure.
  */
 static PyObject *py_symnmf(PyObject *self, PyObject *args)
 {
@@ -181,7 +193,10 @@ static struct PyModuleDef symnmf_module = {
     NULL, NULL, NULL, NULL
 };
 
-/* PyInit_symnmfmodule - module entry point called on import. */
+/*
+ * Called by Python on "import symnmfmodule" to create the module.
+ * Output: the new module object.
+ */
 PyMODINIT_FUNC PyInit_symnmfmodule(void)
 {
     return PyModule_Create(&symnmf_module);

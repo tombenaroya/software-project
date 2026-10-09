@@ -1,8 +1,3 @@
-"""Compare SymNMF and K-means (HW1) clustering on a dataset.
-
-Usage: python3 analysis.py <k> <file_name>
-Prints the silhouette score of each method and the ARI between them.
-"""
 import sys
 
 import numpy as np
@@ -10,24 +5,25 @@ from sklearn.metrics import adjusted_rand_score, silhouette_score
 
 import symnmf
 
-MAX_ITER = 300
-EPSILON = 1e-4
+KMEANS_MAX_ITER = 300
+KMEANS_EPSILON = 1e-4
 
 
 def euclidean_distance(p1, p2):
-    """Euclidean distance between two points.
+    """Calculates the Euclidean distance between two points.
 
-    Input: p1, p2 - equal-length sequences of floats.
-    Output: the distance (float).
+    Input: p1, p2 - two points with the same number of coordinates.
+    Output: the distance between them.
     """
     return float(np.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2))))
 
 
 def closest_centroid(point, centroids):
-    """Index of the centroid nearest to point (first one on ties).
+    """Finds the centroid that is nearest to a point. On a tie the first
+    one wins.
 
-    Input: point - sequence of floats, centroids - list of points.
-    Output: int index into centroids.
+    Input: point - a single point, centroids - the current centroids.
+    Output: the index of the nearest centroid.
     """
     best, best_dist = 0, float("inf")
     for i, centroid in enumerate(centroids):
@@ -38,12 +34,12 @@ def closest_centroid(point, centroids):
 
 
 def kmeans_step(points, centroids):
-    """One K-means iteration (HW1): assign each point to its closest
-    centroid and recompute every centroid as its cluster mean. An empty
-    cluster keeps its previous centroid, as in HW1.
+    """Runs one K-means iteration: every point joins its nearest centroid
+    and every centroid moves to the average of its points. A cluster that
+    ends up empty keeps its old centroid, like in HW1.
 
-    Input: points - list of points, centroids - list of K points.
-    Output: list of K new centroids.
+    Input: points - all data points, centroids - the current K centroids.
+    Output: the list of K new centroids.
     """
     d, K = len(points[0]), len(centroids)
     sums = [[0.0] * d for _ in range(K)]
@@ -58,17 +54,16 @@ def kmeans_step(points, centroids):
 
 
 def kmeans(points, K):
-    """K-means from HW1, with the first K points as the initial centroids,
-    max_iter = 300 and convergence when every centroid moves less than
-    epsilon = 1e-4.
+    """K-means from HW1. Starts from the first K points and stops when
+    every centroid moves less than epsilon, or after max_iter iterations.
 
-    Input: points - list of points (lists of floats), K - clusters.
-    Output: list of cluster labels, one per point.
+    Input: points - the data points as lists, K - number of clusters.
+    Output: the cluster label of every point.
     """
     centroids = [p[:] for p in points[:K]]
-    for _ in range(MAX_ITER):
+    for _ in range(KMEANS_MAX_ITER):
         new_centroids = kmeans_step(points, centroids)
-        converged = all(euclidean_distance(old, new) < EPSILON
+        converged = all(euclidean_distance(old, new) < KMEANS_EPSILON
                         for old, new in zip(centroids, new_centroids))
         centroids = new_centroids
         if converged:
@@ -77,22 +72,24 @@ def kmeans(points, K):
 
 
 def symnmf_labels(X, k):
-    """Cluster with SymNMF: each point gets the column of the highest
-    association score in its row of H (section 1.5).
+    """Clusters the points with SymNMF: each point goes to the cluster
+    (column of H) where it has the highest score.
 
-    Input: X - N x d numpy array, k - clusters.
-    Output: numpy array of N labels.
+    Input: X - the data points, k - number of clusters.
+    Output: a numpy array with the cluster label of every point.
     """
     H = symnmf.run_symnmf(X, k)
     return np.argmax(H, axis=1)
 
 
 def safe_silhouette(X, labels):
-    """silhouette_score that never raises: it needs 2 <= #labels <= N - 1.
-    On failure prints the error and exits.
+    """Calculates the silhouette score without letting it crash.
+    silhouette_score only works when there are between 2 and N - 1
+    different labels, so this is checked first. If anything still goes
+    wrong, the error is printed and the program exits.
 
-    Input: X - N x d numpy array, labels - N cluster labels.
-    Output: the silhouette score (float).
+    Input: X - the data points, labels - the cluster label of every point.
+    Output: the silhouette score.
     """
     n_labels = len(set(labels))
     if not 2 <= n_labels <= len(X) - 1:
@@ -105,7 +102,6 @@ def safe_silhouette(X, labels):
 
 
 def main():
-    """Parse arguments, run both methods and print the scores."""
     if len(sys.argv) != 3:
         symnmf.fail()
     k = symnmf.parse_k(sys.argv[1])
